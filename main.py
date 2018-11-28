@@ -9,7 +9,7 @@ parser.add_argument('--dir-queries', required=True, help='Dir of the files to be
 parser.add_argument('--dir-file-pool', required=True, help='Dir of all the entire files.')
 parser.add_argument('--result-save-path', required=True)
 parser.add_argument('--suffix')
-parser.add_argument('--num-processes', default=1)
+parser.add_argument('--num-processes', default=1, type=int)
 
 
 def get_file_md5sum(file_path):
@@ -25,7 +25,7 @@ def get_file_paths(root_dir, suffix):
 
 
 def calc_md5_for_dir(dir_path, suffix, num_processes=1):
-    print('Calculating md5 for %s files in %s ...' % (suffix, dir_path))
+    print('Calculating md5 for %s files in %s using %d processes ...' % (suffix, dir_path, num_processes))
     file_paths = get_file_paths(dir_path, suffix)
     with multiprocessing.Pool(processes=num_processes) as pool:
         md5 = pool.map(get_file_md5sum, file_paths)
