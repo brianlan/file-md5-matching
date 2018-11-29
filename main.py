@@ -10,6 +10,7 @@ parser.add_argument('--dir-file-pool', required=True, help='Dir of all the entir
 parser.add_argument('--result-save-path', required=True)
 parser.add_argument('--suffix')
 parser.add_argument('--num-processes', default=1, type=int)
+parser.add_argument('--follow-symlinks', action='store_true', default=False)
 
 
 def get_file_md5sum(file_path):
@@ -18,15 +19,24 @@ def get_file_md5sum(file_path):
     return output.split()[0].decode()
 
 
-def get_file_paths(root_dir, suffix):
-    p = subprocess.Popen('find %s -name "*.%s"' % (root_dir, suffix), stdout=subprocess.PIPE, shell=True)
-    output, err = p.communicate()
-    return [line.strip().decode() for line in output.strip().split(b'\n')]
+def construct_exec_str(root_dir, suffix, follow_symlinks=False):
+    return 'find %s%s -name "*.%s"' % ('-L ' if follow_symlinks else '', root_dir, suffix)
 
 
-def calc_md5_for_dir(dir_path, suffix, num_processes=1):
+def split_stdout(stdout_text):
+    return [line.strip().decode() for line in stdout_text.strip().split(b'\n')]
+
+
+def get_file_paths(root_dir, suffix, follow_symlinks=False):
+    exec_str = construct_exec_str(root_dir, suffix, follow_symlinks=follow_symlinks)
+    p = subprocess.Popen(exec_str, stdout=subprocess.PIPE, shell=True)
+    stdout, err = p.communicate()
+    return split_stdout(stdout)
+
+
+def calc_file_md5_in_dir(dir_path, suffix, num_processes=1, follow_symlinks=False):
     print('Calculating md5 for %s files in %s using %d processes ...' % (suffix, dir_path, num_processes))
-    file_paths = get_file_paths(dir_path, suffix)
+    file_paths = get_file_paths(dir_path, suffix, follow_symlinks=follow_symlinks)
     with multiprocessing.Pool(processes=num_processes) as pool:
         md5 = pool.map(get_file_md5sum, file_paths)
     return {m: p for m, p in zip(md5, file_paths)}
@@ -54,8 +64,10 @@ def check_linux_command_exists(commands):
 
 def main(args):
     check_linux_command_exists(['find', 'xargs', 'md5sum'])
-    queries = calc_md5_for_dir(args.dir_queries, args.suffix, num_processes=args.num_processes)
-    file_pool = calc_md5_for_dir(args.dir_file_pool, args.suffix, num_processes=args.num_processes)
+    queries = calc_file_md5_in_dir(args.dir_queries, args.suffix, num_processes=args.num_processes,
+                                   follow_symlinks=args.follow_symlinks)
+    file_pool = calc_file_md5_in_dir(args.dir_file_pool, args.suffix, num_processes=args.num_processes,
+                                     follow_symlinks=args.follow_symlinks)
     results = calc_match_results(queries, file_pool)
     write_results(results, args.result_save_path)
 
